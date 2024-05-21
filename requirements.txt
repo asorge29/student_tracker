@@ -1,0 +1,3 @@
+inquirer
+pymysql
+rich
