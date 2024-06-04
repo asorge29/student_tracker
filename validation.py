@@ -34,7 +34,7 @@ def validatePassword(answers, password):
         raise errors.ValidationError(password, reason='Password must be at least 8 characters.')
     elif len(password) > 64:
         raise errors.ValidationError(password, reason='Password must be at most 64 characters.')
-    elif not crsr.execute(f"SELECT password FROM user_creds where password=%s and username=%s", (password, answers["username"])):
+    elif not crsr.execute("SELECT password FROM user_creds where password=%s and username=%s", (password, answers["username"])):
         raise errors.ValidationError(password, reason='Incorrect password.')
     return True
 

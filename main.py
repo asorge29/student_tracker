@@ -3,7 +3,7 @@ import pymysql
 from rich import print
 from prompts import *
 from tkinter.filedialog import asksaveasfilename
-from os import system
+from os import system, path
 
 db = pymysql.connect(host="localhost", user="root", password="399764abc", database="student_tracker")
 db.autocommit(True)
@@ -15,27 +15,153 @@ def saveTranscript(transcript):
         with open(file, "w") as f:
             f.write(transcript)
 
-def clearTerm():
+def cls():
     if system == "Windows":
         system("cls")
     else:
         system("clear")
 
 intent = inquirer.list_input("What do you want to do? (Select with arrow keys)", choices=["Log In", "Register", "Exit"])
-clearTerm()
+cls()
 
 if intent == "Log In":
     creds = inquirer.prompt(login)
-    crsr.execute("select fname, lname from user_info where id=(select id from user_creds where username=%s)", (creds["username"]))
-    fname, lname = crsr.fetchone()
-    clearTerm()
+    crsr.execute("select fname, lname, id from user_info where id=(select id from user_creds where username=%s)", (creds["username"]))
+    fname, lname, userID = crsr.fetchone()
+    cls()
     choice = {"mainMenu":str}
     while choice['mainMenu'] != "Exit":
-        clearTerm()
+        #cls()
         print(f"[green]Welcome back, {fname}!")
         choice = inquirer.prompt(mainMenu)
-        print(f"[green]Your choice:[/green] [red][underline]{choice['mainMenu']}")
-    clearTerm()
+        if choice['mainMenu'] == "View Classes & Grades":
+            crsr.execute("select name, grade from classes where student_id=%s", (userID))
+            classes = crsr.fetchall()
+            print(f"[green]{fname}'s Classes & Grades:[/green]")
+            for i in classes:
+                print(f"Class: {i[0]} | Grade: {i[1]}")
+                input("Press enter to continue...")
+        elif choice['mainMenu'] == "Update Classes & Grades":
+            updateChoice = inquirer.prompt(updateClasses)
+            while updateChoice['updateClasses']!= "Go Back":
+                if updateChoice['updateClasses'] == "Add Class":
+                    newClass = inquirer.prompt(addClass)
+                    if newClass['current'] == "Yes":
+                        newClass['current'] = 1
+                    else:
+                        newClass['current'] = 0
+                    print("[yellow]Adding Class...")
+                    crsr.execute("insert into classes (student_id, name, grade, current) values (%s, %s, %s, %s)", (userID, newClass['className'], newClass['grade'], newClass['current']))
+                    print("[green]Class Added!")
+                    input("Press Enter to continue...")
+                elif updateChoice['updateClasses'] == "Remove Class":
+                    crsr.execute("select name, id from classes where student_id=%s", (userID))
+                    classes = crsr.fetchall()
+                    toRemove = inquirer.list_input("Select the class you want to remove", choices=[i[0] for i in classes])
+                    toRemoveId = [i[1] for i in classes if i[0] == toRemove][0]
+                    print("[yellow]Removing Class...")
+                    crsr.execute("delete from classes where id=%s", (toRemoveId))
+                    print("[green]Class Removed!")
+                    input("Press Enter to continue...")
+                elif updateChoice['updateClasses'] == "Update Class":
+                    updateType = inquirer.prompt(updateClass)
+                    print(updateType)
+                    while updateType['updateClass']!= "Go Back":
+                        crsr.execute("select name, id from classes where student_id=%s", (userID))
+                        classes = crsr.fetchall()
+                        toUpdate = inquirer.list_input("Select the class you want to update", choices=[i[0] for i in classes])
+                        toUpdateId = [i[1] for i in classes if i[0] == toUpdate][0]   
+                        if updateType['updateClass'] == "Update Class Name":
+                            newName = inquirer.text("Enter the new class name")
+                            print("[yellow]Updating Class Name...")
+                            crsr.execute("update classes set name=%s where id=%s", (newName, toUpdateId))
+                            print("[green]Class Name Updated!")
+                            input("Press Enter to continue...")
+                        elif updateType['updateClass'] == "Update Class Grade":
+                            newGrade = inquirer.list_input("Select the new grade", choices=['A', 'B', 'C', 'D', 'F'])
+                            print("[yellow]Updating Class Grade...")
+                            crsr.execute("update classes set grade=%s where id=%s", (newGrade, toUpdateId))
+                            print("[green]Class Grade Updated!")
+                            input("Press Enter to continue...")
+                        elif updateType['updateClass'] == "Update Class Enrollment Status":
+                            newStatus = inquirer.list_input("Select the new enrollment status", choices=['Yes', 'No'])
+                            if newStatus == "Yes":
+                                newStatus = 1
+                            else:
+                                newStatus = 0
+                            print("[yellow]Updating Class Enrollment Status...")
+                            crsr.execute("update classes set current=%s where id=%s", (newStatus, toUpdateId))
+                            print("[green]Class Enrollment Status Updated")
+                            input("Press Enter to continue...")
+                        updateType = inquirer.prompt(updateClass)
+                updateChoice = inquirer.prompt(updateClasses)
+        elif choice['mainMenu'] == "Export Transcript":
+            print("[yellow]Exporting Transcript...")
+            with open(path.expanduser("~/Desktop/transcript.txt"), "w") as f:
+                f.write(f"Transcript for {fname} {lname}\n")
+                f.write("----------------------------------------\n")
+                crsr.execute("select name, grade from classes where student_id=%s and current=1", (userID))
+                currentClasses = crsr.fetchall()
+                f.write("Current Classes:\n")
+                for i in currentClasses:
+                    f.write(f"{i[0]}: {i[1]}\n")
+                f.write("----------------------------------------\n")
+                crsr.execute("select name, grade from classes where student_id=%s and current=0", (userID))
+                pastClasses = crsr.fetchall()
+                f.write("Past Classes:\n")
+                for i in pastClasses:
+                    f.write(f"{i[0]}: {i[1]}\n")
+                f.write("----------------------------------------\n")
+                crsr.execute("select grade from classes where student_id=%s", (userID))
+                grades = crsr.fetchall()
+                grades = [i[0] for i in grades]
+                for i in range(len(grades)):
+                    if grades[i] == "A":
+                        grades[i] = 4.0
+                    elif grades[i] == "B":
+                        grades[i] = 3.0
+                    elif grades[i] == "C":
+                        grades[i] = 2.0
+                    elif grades[i] == "D":
+                        grades[i] = 1.0
+                    elif grades[i] == "F":
+                        grades[i] = 0.0
+                points = 0
+                for i in grades:
+                    points += i
+                gpa = points / len(grades)
+                gpa = round(gpa, 2)
+                f.write(f"GPA: {gpa}")
+                f.write("\n----------------------------------------\n")
+                f.write(f"End of Transcript")
+                f.close()
+            print("[green]Transcript Exported!")
+            input("Press Enter to continue...")
+        elif choice['mainMenu'] == "Calculate GPA":
+            crsr.execute("select grade from classes where student_id=%s", (userID))
+            grades = crsr.fetchall()
+            grades = [i[0] for i in grades]
+            for i in range(len(grades)):
+                if grades[i] == "A":
+                    grades[i] = 4.0
+                elif grades[i] == "B":
+                    grades[i] = 3.0
+                elif grades[i] == "C":
+                    grades[i] = 2.0
+                elif grades[i] == "D":
+                    grades[i] = 1.0
+                elif grades[i] == "F":
+                    grades[i] = 0.0
+            points = 0
+            for i in grades:
+                points += i
+            gpa = points / len(grades)
+            gpa = round(gpa, 2)
+            print(f"Your GPA is: {gpa}")
+            input("Press Enter to continue...")
+        elif choice['mainMenu'] == "Update User Info":
+            pass
+    #cls()
     print("[red]Exiting...")
     print("[green]Goodbye!")
     exit()
