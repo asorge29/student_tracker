@@ -30,3 +30,7 @@ addClass = [
 updateClass = [
     inquirer.List('updateClass', message='What do you want to do?', choices=['Update Class Name', 'Update Class Grade', 'Update Class Enrollment Status', 'Go Back']),
 ]
+
+updateInfo = [
+    inquirer.List('updateInfo', message='What do you want to do?', choices=['Update First Name', 'Update Last Name', 'Update Username', 'Update Password', 'Go Back']),
+]
